@@ -60,9 +60,55 @@
 #   endif
 
 #else
-    typedef unsigned int _msgpack_atomic_counter_t;
+
+ typedef unsigned int _msgpack_atomic_counter_t;
+#ifdef __linux
+
 #   define _msgpack_sync_decr_and_fetch(ptr) __sync_sub_and_fetch(ptr, 1)
 #   define _msgpack_sync_incr_and_fetch(ptr) __sync_add_and_fetch(ptr, 1)
+
+#else
+    
+static inline int _atomic_add_return(volatile int *v, int i)
+{
+ unsigned int tmp=0; 
+ int result=0;
+
+ __asm__ __volatile__("@ atomic_add_return\n"
+"1: ldrex %0, [%3]\n"
+" add %0, %0, %4\n"
+" strex %1, %0, [%3]\n"
+" teq %1, #0\n"
+" bne 1b"
+ : "=&r" (result), "=&r" (tmp), "+Qo" (*v)
+ : "r" (v), "Ir" (i)
+ : "cc", "memory");
+
+ return result;
+}
+
+static inline int _atomic_sub_return(volatile int *v, int i)
+{
+ unsigned int tmp=0; 
+ int result=0;
+
+ __asm__ __volatile__("@ atomic_add_return\n"
+"1: ldrex %0, [%3]\n"
+" sub %0, %0, %4\n"
+" strex %1, %0, [%3]\n"
+" teq %1, #0\n"
+" bne 1b"
+ : "=&r" (result), "=&r" (tmp), "+Qo" (*v)
+ : "r" (v), "Ir" (i)
+ : "cc", "memory");
+
+ return result;
+}
+
+#   define _msgpack_sync_decr_and_fetch(ptr) _atomic_sub_return(ptr, 1)
+#   define _msgpack_sync_incr_and_fetch(ptr) _atomic_add_return(ptr, 1)
+
+#endif
 #endif
 
 #ifdef _WIN32
